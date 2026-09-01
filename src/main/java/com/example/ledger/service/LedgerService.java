@@ -16,6 +16,23 @@ public class LedgerService {
     public void addAccount(Account account){
         accounts.put(account.getId(), account);
     }
+    public void applyDailyInterest(Account account, LocalDate date){
+        double balance = calculateBalance(account, date);
+
+        if (balance > 0){
+            double interest = balance * 0.0004;
+            accruedInterest.merge(account.getId(), interest, Double::sum);
+        }
+    }
+    public void capitalizeInterest(Account account, LocalDate date){
+        double total = accruedInterest.getOrDefault(account.getId(), 0.0);
+        if (total > 0){
+            account.getLedgerEntries().add(
+                    new LedgerEntry("INT-" + date, LedgerEntry.Type.INTEREST, total, date)
+            );
+            accruedInterest.put(account.getId(), 0.0);
+        }
+    }
     public void replayEvents(List<Event> events){
         for (Event event:events){
             processEvent(event);
