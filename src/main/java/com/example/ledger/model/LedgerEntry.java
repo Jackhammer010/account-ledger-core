@@ -1,5 +1,6 @@
 package com.example.ledger.model;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public class LedgerEntry {
@@ -7,10 +8,10 @@ public class LedgerEntry {
 
     private final String id;
     private final Type type;
-    private final double amount;
+    private final BigDecimal amount;
     private final LocalDate valueDate;
 
-    public LedgerEntry(String id, Type type, double amount, LocalDate valueDate) {
+    public LedgerEntry(String id, Type type, BigDecimal amount, LocalDate valueDate) {
         this.id = id;
         this.type = type;
         this.amount = amount;
@@ -25,7 +26,7 @@ public class LedgerEntry {
         return type;
     }
 
-    public double getAmount() {
+    public BigDecimal getAmount() {
         return amount;
     }
 

@@ -1,5 +1,6 @@
 package com.example.ledger.model;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 public class Event {
@@ -9,11 +10,11 @@ public class Event {
     private final int day;
     private final Type type;
     private final String accountId;
-    private final double amount;
+    private final BigDecimal amount;
     private final LocalDate valueDate;
     private final String authId;
 
-    public Event(String id, int day, Type type, String accountId, double amount, LocalDate valueDate, String authId) {
+    public Event(String id, int day, Type type, String accountId, BigDecimal amount, LocalDate valueDate, String authId) {
         this.id = id;
         this.day = day;
         this.type = type;
@@ -39,7 +40,7 @@ public class Event {
         return accountId;
     }
 
-    public double getAmount() {
+    public BigDecimal getAmount() {
         return amount;
     }
 

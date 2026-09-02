@@ -1,6 +1,7 @@
 package com.example.ledger.model;
 
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -10,12 +11,12 @@ public class Account {
     private final String id;
     private final String currency;
     private final int precision;
-    private final double openingBalance;
+    private final BigDecimal openingBalance;
 
     private final List<LedgerEntry> ledgerEntries = new ArrayList<>();
     private final Map<String, Authorization> authorizations = new HashMap<>();
 
-    public Account(String id, String currency, int precision, double openingBalance){
+    public Account(String id, String currency, int precision, BigDecimal openingBalance){
         this.id = id;
         this.currency = currency;
         this.precision = precision;
@@ -34,7 +35,7 @@ public class Account {
         return precision;
     }
 
-    public double getOpeningBalance() {
+    public BigDecimal getOpeningBalance() {
         return openingBalance;
     }
 

@@ -5,37 +5,50 @@ import com.example.ledger.model.Authorization;
 import com.example.ledger.model.Event;
 import com.example.ledger.model.LedgerEntry;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.*;
 
 public class LedgerService {
     private final Map<String, Account> accounts = new HashMap<>();
     private final List<String> errors = new ArrayList<>();
-    private final Map<String, Double> accruedInterest = new HashMap<>();
+    private final Map<String, BigDecimal> accruedInterest = new HashMap<>();
+    private final Map<String, Set<String>> reversedEntryIds = new HashMap<>();
 
     public void addAccount(Account account){
         accounts.put(account.getId(), account);
     }
-    public void applyDailyInterest(Account account, LocalDate date){
-        double balance = calculateBalance(account, date);
-
-        if (balance > 0){
-            double interest = balance * 0.0004;
-            accruedInterest.merge(account.getId(), interest, Double::sum);
+    public void applyDailyInterest(Account account, LocalDate date) {
+        BigDecimal balance = calculateBalance(account, date);
+        if (balance.compareTo(BigDecimal.ZERO) > 0) {
+            BigDecimal interest = round(
+                    balance.multiply(new BigDecimal("0.0004")),
+                    account.getPrecision()
+            );
+            accruedInterest.merge(account.getId(), interest, BigDecimal::add);
         }
     }
-    public void capitalizeInterest(Account account, LocalDate date){
-        double total = accruedInterest.getOrDefault(account.getId(), 0.0);
-        if (total > 0){
+    public void capitalizeInterest(Account account, LocalDate date) {
+        BigDecimal total = accruedInterest.getOrDefault(account.getId(), BigDecimal.ZERO);
+        if (total.compareTo(BigDecimal.ZERO) > 0) {
             account.getLedgerEntries().add(
                     new LedgerEntry("INT-" + date, LedgerEntry.Type.INTEREST, total, date)
             );
-            accruedInterest.put(account.getId(), 0.0);
+            accruedInterest.put(account.getId(), BigDecimal.ZERO); // reset
         }
     }
     public void replayEvents(List<Event> events){
         for (Event event:events){
             processEvent(event);
+        }
+    }
+    public void applyOverdraftFee(Account account, LocalDate date) {
+        BigDecimal balance = calculateBalance(account, date);
+        if (balance.compareTo(BigDecimal.ZERO) < 0) {
+            account.getLedgerEntries().add(
+                    new LedgerEntry("FEE-" + date, LedgerEntry.Type.FEE, new BigDecimal("-25.00"), date)
+            );
         }
     }
     private void processEvent(Event event){
@@ -60,54 +73,84 @@ public class LedgerService {
     }
     private void handleDebit(Account account, Event event){
         account.getLedgerEntries().add(
-                new LedgerEntry(event.getId(), LedgerEntry.Type.DEBIT, event.getAmount(), event.getValueDate())
+                new LedgerEntry(event.getId(), LedgerEntry.Type.DEBIT, event.getAmount().negate(), event.getValueDate())
         );
     }
     private void handleAuthorization(Account account, Event event){
-        double availableBalance = calculateBalance(account, event.getValueDate()) - activeHoldTotal(account);
+        if (account.getAuthorizations().containsKey(event.getAuthId())){
+            errors.add("Authorization " + event.getAuthId() + " already exists");
+            return;
+        }
+        BigDecimal availableBalance = calculateBalance(account, event.getValueDate())
+                .subtract(activeHoldTotal(account));
 
-        if (availableBalance - event.getAmount() >= 0){
+        if (availableBalance.subtract(event.getAmount()).compareTo(BigDecimal.ZERO) >= 0){
             account.getAuthorizations().put(event.getAuthId(),
                     new Authorization(event.getAuthId(),event.getAmount()));
         }
         else{
+            Authorization rejected = new Authorization(event.getAuthId(), event.getAmount());
+            rejected.setStatus(Authorization.Status.REJECTED);
+            account.getAuthorizations().put(event.getAuthId(), rejected);
             errors.add("Authorization " + event.getAuthId() + " insufficient funds");
         }
     }
     private void handleSettlement(Account account, Event event){
         Authorization auth = account.getAuthorizations().get(event.getAuthId());
-
         if (auth == null){
-            errors.add("Settlement " + event.getId() + " reference missing authorization " + event.getAuthId());
+            errors.add("Settlement " + event.getId() + " references missing authorization " + event.getAuthId());
+            return;
+        }
+        if (auth.getStatus() != Authorization.Status.ACTIVE){
+            errors.add("Settlement " + event.getId() + " references non-active authorization " + event.getAuthId());
             return;
         }
         auth.setStatus(Authorization.Status.SETTLED);
         account.getLedgerEntries().add(
-                new LedgerEntry(event.getId(), LedgerEntry.Type.SETTLEMENT, -event.getAmount(), event.getValueDate())
+                new LedgerEntry(event.getId(), LedgerEntry.Type.SETTLEMENT, event.getAmount().negate(), event.getValueDate())
         );
     }
     private void handleReversal(Account account, Event event){
+        String referenceId = event.getAuthId();
+
+        LedgerEntry original = account.getLedgerEntries().stream()
+                .filter(e -> e.getId().equals(referenceId))
+                .findFirst()
+                .orElse(null);
+
+        if (original == null){
+            errors.add("Reversal " + event.getId() + " references missing entry " + referenceId);
+            return;
+        }
+
+        Set<String> reversed = reversedEntryIds.computeIfAbsent(account.getId(), k -> new HashSet<>());
+
+        if (reversed.contains(referenceId)){
+            errors.add("Reversal " + event.getId() + " — entry " + referenceId + " already reversed");
+            return;
+        }
+
         account.getLedgerEntries().add(
-                new LedgerEntry(event.getId(), LedgerEntry.Type.REVERSAL, event.getAmount(), event.getValueDate())
+                new LedgerEntry(event.getId(), LedgerEntry.Type.REVERSAL, original.getAmount().negate(), event.getValueDate())
         );
+        reversed.add(referenceId);
     }
-    private double calculateBalance(Account account, LocalDate upToDate){
-        double balance = account.getOpeningBalance();
+    public BigDecimal calculateBalance(Account account, LocalDate upToDate){
+        BigDecimal balance = account.getOpeningBalance();
         for (LedgerEntry entry : account.getLedgerEntries()){
             if (!entry.getValueDate().isAfter(upToDate))
-                balance += entry.getAmount();
+                balance = balance.add(entry.getAmount());
         }
-        return round(balance, account.getPrecision());
+        return balance.setScale(account.getPrecision(), RoundingMode.HALF_UP);
     }
-    private double activeHoldTotal(Account account){
+    public BigDecimal activeHoldTotal(Account account){
         return account.getAuthorizations().values().stream()
                 .filter(a -> a.getStatus() == Authorization.Status.ACTIVE)
-                .mapToDouble(Authorization::getAmount)
-                .sum();
+                .map(Authorization::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
-    private double round(double value, int precision){
-        double scale = Math.pow(10, precision);
-        return Math.round(value * scale) / scale;
+    private BigDecimal round(BigDecimal value, int precision){
+        return value.setScale(precision, RoundingMode.HALF_UP);
     }
     public List<String> getErrors(){
         return errors;

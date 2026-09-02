@@ -1,12 +1,14 @@
 package com.example.ledger.model;
 
+import java.math.BigDecimal;
+
 public class Authorization {
     public enum Status {ACTIVE, SETTLED, REJECTED};
     private final String id;
-    private final double amount;
+    private final BigDecimal amount;
     private Status status;
 
-    public Authorization(String id, double amount) {
+    public Authorization(String id, BigDecimal amount) {
         this.id = id;
         this.amount = amount;
         this.status = Status.ACTIVE;
@@ -16,7 +18,7 @@ public class Authorization {
         return id;
     }
 
-    public double getAmount() {
+    public BigDecimal getAmount() {
         return amount;
     }
 
