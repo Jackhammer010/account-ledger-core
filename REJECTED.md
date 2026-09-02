@@ -156,9 +156,14 @@ four above and found correct, not simply left unexamined:
   instead of 440.00, capitalized interest 0.93 instead of 0.83.
   Abandoned in favor of Option A on two grounds: the spec's wording
   supports Option A's reading at least as well as Option B's (see
-  AMBIGUITIES.md), and Option A is materially simpler to hold up under
-  live, unaided questioning — fewer moving parts, no recursive sweep
-  logic to narrate from memory, lower risk on a hard deadline.
+  AMBIGUITIES.md), and this is fundamentally a business-logic decision,
+  not an implementation detail — the two readings produce different fee
+  counts, different fee dates, and different final account balances for
+  the same event stream (see AMBIGUITIES.md §1 for the full comparison).
+  Absent an explicit product rule settling which is intended, defaulting
+  to the narrower, less retroactive interpretation (A) avoids silently
+  imposing an assumption with real financial consequences that the spec
+  itself doesn't state.
 
 - **Un-scoped, cumulative error list, reprinted in full every day.**
   The first working version of `LedgerService.errors` was a single
