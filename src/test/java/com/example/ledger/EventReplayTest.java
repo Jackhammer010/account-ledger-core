@@ -195,7 +195,9 @@ public class EventReplayTest {
     @Test
     void FAILING_afterE9_balanceDoesNotFullyReturnToPreE7Value() {
         Fixture f = new Fixture();
-        f.runThroughDay(5); // through Day 5 close (fee assessed), before interest capitalizes
+        f.runThroughDay(5);   // Days 1-5, fully interleaved admit+close (Day 5 fee assessed)
+        f.admitThroughDay(6); // admits Day 6's events (E9) WITHOUT running Day 6's close,
+        // so interest capitalization doesn't conflate with this assertion
 
         BigDecimal preE7Day6Baseline = new BigDecimal("465.00"); // 1200 - 950 + 400 - 185, no E7/fee/reversal
         BigDecimal actualBalance = f.service.calculateBalance(f.acc001, LocalDate.of(2026, 9, 6));
